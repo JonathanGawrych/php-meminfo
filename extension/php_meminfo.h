@@ -11,7 +11,6 @@ extern zend_module_entry meminfo_module_entry;
 #define MEMINFO_COPYRIGHT_SHORT "Copyright (c) 2010-2021"
 
 PHP_FUNCTION(meminfo_dump);
-PHP_FUNCTION(object_store_dump);
 
 zend_ulong   meminfo_get_element_size(zval* z);
 
