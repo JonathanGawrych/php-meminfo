@@ -11,6 +11,7 @@ extern zend_module_entry meminfo_module_entry;
 #define MEMINFO_COPYRIGHT_SHORT "Copyright (c) 2010-2021"
 
 PHP_FUNCTION(meminfo_dump);
+PHP_FUNCTION(object_store_dump);
 
 zend_ulong   meminfo_get_element_size(zval* z);
 
@@ -31,6 +32,8 @@ void meminfo_zval_dump(meminfo_stream_info *stream_info, char * frame_label, zen
 void meminfo_hash_dump(meminfo_stream_info *stream_info, HashTable *ht, zend_bool is_object);
 void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *symbol_table);
 void meminfo_browse_zvals_from_op_array(meminfo_stream_info *stream_info, zend_op_array *op_array, zend_execute_data *exec_frame);
+void meminfo_browse_object_store(php_stream *stream, HashTable * visited_items, int *first_element);
+
 int meminfo_visit_item(char *item_identifier, HashTable *visited_items);
 
 void meminfo_build_frame_label(char * frame_label, int frame_label_len, zend_execute_data* frame);
