@@ -14,15 +14,21 @@ PHP_FUNCTION(meminfo_dump);
 
 zend_ulong   meminfo_get_element_size(zval* z);
 
-// Functions to browse memory parts to record item
-void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, int *first_element);
-void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited_items, int *first_element);
-void meminfo_browse_function_static_variables(php_stream *stream, char* class_name, HashTable *function_table, HashTable *visited_items, int *first_element);
+typedef struct meminfo_stream_info {
+	php_stream *stream;
+	HashTable *visited_items;
+	char frame_label[500];
+} meminfo_stream_info;
 
-void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * symbol_name, zval * zv, HashTable *visited_items, int *first_element);
-void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, HashTable *visited_items, int *first_element);
-void meminfo_browse_zvals_from_symbol_table(php_stream *stream, char * frame_label, HashTable *symbol_table, HashTable * visited_items, int *first_element);
-void meminfo_browse_zvals_from_op_array(php_stream *stream, char * frame_label, zend_op_array *op_array, zend_execute_data *exec_frame, HashTable * visited_items, int *first_element);
+// Functions to browse memory parts to record item
+void meminfo_browse_exec_frames(meminfo_stream_info *stream_info);
+void meminfo_browse_class_static_members(meminfo_stream_info *stream_info);
+void meminfo_browse_function_static_variables(meminfo_stream_info *stream_info, char* class_name, HashTable *function_table);
+
+void meminfo_zval_dump(meminfo_stream_info *stream_info, char * frame_label, zend_string * symbol_name, zval * zv);
+void meminfo_hash_dump(meminfo_stream_info *stream_info, HashTable *ht, zend_bool is_object);
+void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *symbol_table);
+void meminfo_browse_zvals_from_op_array(meminfo_stream_info *stream_info, zend_op_array *op_array, zend_execute_data *exec_frame);
 int meminfo_visit_item(char *item_identifier, HashTable *visited_items);
 
 void meminfo_build_frame_label(char * frame_label, int frame_label_len, zend_execute_data* frame);

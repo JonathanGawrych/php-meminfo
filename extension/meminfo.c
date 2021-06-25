@@ -54,8 +54,6 @@ PHP_FUNCTION(meminfo_dump)
 {
     zval *zval_stream;
 
-    int first_element = 1;
-
     php_stream *stream;
     HashTable visited_items;
 
@@ -76,9 +74,15 @@ PHP_FUNCTION(meminfo_dump)
     php_stream_printf(stream, "  },\n");
 
     php_stream_printf(stream, "  \"items\": {\n");
-    meminfo_browse_exec_frames(stream, &visited_items, &first_element);
-    meminfo_browse_class_static_members(stream, &visited_items, &first_element);
-    meminfo_browse_function_static_variables(stream, "<GLOBAL_FUNCTION>", CG(function_table), &visited_items, &first_element);
+
+    meminfo_stream_info stream_info;
+    stream_info.stream = stream;
+    stream_info.visited_items = &visited_items;
+    stream_info.frame_label[0] = '\0';
+
+    meminfo_browse_exec_frames(&stream_info);
+    meminfo_browse_class_static_members(&stream_info);
+    meminfo_browse_function_static_variables(&stream_info, "<GLOBAL_FUNCTION>", CG(function_table));
 
     php_stream_printf(stream, "\n    }\n");
     php_stream_printf(stream, "}\n}\n");
@@ -89,14 +93,12 @@ PHP_FUNCTION(meminfo_dump)
 /**
  * Go through all exec frames to gather declared variables and follow them to record items in memory
  */
-void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, int *first_element)
+void meminfo_browse_exec_frames(meminfo_stream_info *stream_info)
 {
     zend_execute_data *exec_frame, *prev_frame;
     zend_array *p_symbol_table;
 
     exec_frame = EG(current_execute_data);
-
-    char frame_label[500];
 
     // Skipping the frame of the meminfo_dump() function call
     exec_frame = exec_frame->prev_execute_data;
@@ -113,12 +115,12 @@ void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, i
         if (p_symbol_table != NULL) {
 
             if (exec_frame->prev_execute_data) {
-                meminfo_build_frame_label(frame_label, sizeof(frame_label), exec_frame);
+                meminfo_build_frame_label(stream_info->frame_label, sizeof(stream_info->frame_label), exec_frame);
             } else {
-                snprintf(frame_label, sizeof(frame_label), "<GLOBAL>");
+                snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<GLOBAL>");
             }
 
-            meminfo_browse_zvals_from_symbol_table(stream, frame_label, p_symbol_table, visited_items, first_element);
+            meminfo_browse_zvals_from_symbol_table(stream_info, p_symbol_table);
 
         }
         exec_frame = exec_frame->prev_execute_data;
@@ -128,7 +130,7 @@ void meminfo_browse_exec_frames(php_stream *stream,  HashTable *visited_items, i
 /**
  * Go through static members of classes
  */
-void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited_items, int *first_element)
+void meminfo_browse_class_static_members(meminfo_stream_info *stream_info)
 {
     HashPosition ce_pos;
     HashPosition prop_pos;
@@ -149,6 +151,7 @@ void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited
         if (class_entry->static_members_table) {
 #endif
 
+            snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<CLASS_STATIC_MEMBER>");
             HashTable *properties_info = &(class_entry->properties_info);
 
             zend_hash_internal_pointer_reset_ex(properties_info, &prop_pos);
@@ -172,7 +175,7 @@ void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited
 
                     zstr_symbol_name = zend_string_init(symbol_name, strlen(symbol_name), 0);
 
-                    meminfo_zval_dump(stream, "<CLASS_STATIC_MEMBER>", zstr_symbol_name, prop, visited_items, first_element);
+                    meminfo_zval_dump(stream_info, stream_info->frame_label, zstr_symbol_name, prop);
 
                     zend_string_release(zstr_symbol_name);
                 }
@@ -183,11 +186,9 @@ void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited
         
         // Static local variables can be hiding in class member functions. Find them here
         meminfo_browse_function_static_variables(
-            stream,
+            stream_info,
             ZSTR_VAL(class_entry->name),
-            &class_entry->function_table,
-            visited_items,
-            first_element
+            &class_entry->function_table
         );
 
         zend_hash_move_forward_ex(CG(class_table), &ce_pos);
@@ -197,9 +198,8 @@ void meminfo_browse_class_static_members(php_stream *stream,  HashTable *visited
 /**
  * Go through static variables of functions
  */
-void meminfo_browse_function_static_variables(php_stream *stream, char* class_name, HashTable *function_table, HashTable *visited_items, int *first_element)
+void meminfo_browse_function_static_variables(meminfo_stream_info *stream_info, char* class_name, HashTable *function_table)
 {
-    char frame_label[500];
     char symbol_name[500];
     zend_string * zstr_symbol_name;
     zend_function * func;
@@ -212,7 +212,7 @@ void meminfo_browse_function_static_variables(php_stream *stream, char* class_na
         if (func->type == ZEND_USER_FUNCTION && func->op_array.static_variables != NULL) {
             ZEND_HASH_FOREACH_STR_KEY_VAL(func->op_array.static_variables, zstaticvarkey, zstaticvar) {
                 
-                snprintf(frame_label, sizeof(frame_label), "<STATIC_VARIABLE(%s::%s)>",
+                snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<STATIC_VARIABLE(%s::%s)>",
                     class_name,
                     ZSTR_VAL(func->op_array.function_name)
                 );
@@ -220,7 +220,7 @@ void meminfo_browse_function_static_variables(php_stream *stream, char* class_na
             
                 zstr_symbol_name = zend_string_init(symbol_name, strlen(symbol_name), 0);
 
-                meminfo_zval_dump(stream, frame_label, zstr_symbol_name, zstaticvar, visited_items, first_element);
+                meminfo_zval_dump(stream_info, stream_info->frame_label, zstr_symbol_name, zstaticvar);
 
                 zend_string_release(zstr_symbol_name);
                 
@@ -229,7 +229,7 @@ void meminfo_browse_function_static_variables(php_stream *stream, char* class_na
     } ZEND_HASH_FOREACH_END();
 }
 
-void meminfo_browse_zvals_from_symbol_table(php_stream *stream, char* frame_label, HashTable *p_symbol_table, HashTable * visited_items, int *first_element)
+void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *p_symbol_table)
 {
     zval *zval_to_dump;
     HashPosition pos;
@@ -243,7 +243,7 @@ void meminfo_browse_zvals_from_symbol_table(php_stream *stream, char* frame_labe
 
         zend_hash_get_current_key_ex(p_symbol_table, &key, &index, &pos);
 
-        meminfo_zval_dump(stream, frame_label, key, zval_to_dump, visited_items, first_element);
+        meminfo_zval_dump(stream_info, stream_info->frame_label, key, zval_to_dump);
 
         zend_hash_move_forward_ex(p_symbol_table, &pos);
     }
@@ -269,7 +269,7 @@ int meminfo_visit_item(char * item_identifier, HashTable *visited_items)
     return found;
 }
 
-void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, HashTable *visited_items, int *first_element)
+void meminfo_hash_dump(meminfo_stream_info *stream_info, HashTable *ht, zend_bool is_object)
 {
     zval *zval;
 
@@ -279,7 +279,7 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
 
     int first_child = 1;
 
-    php_stream_printf(stream, "        \"children\" : {\n");
+    php_stream_printf(stream_info->stream, "        \"children\" : {\n");
 
     zend_hash_internal_pointer_reset_ex(ht, &pos);
     while ((zval = zend_hash_get_current_data_ex(ht, &pos)) != NULL) {
@@ -300,7 +300,7 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
         }
 
         if (!first_child) {
-            php_stream_printf(stream, ",\n");
+            php_stream_printf(stream_info->stream, ",\n");
         } else {
             first_child = 0;
         }
@@ -316,7 +316,7 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
 
                     escaped_property_name = meminfo_escape_for_json(property_name);
 
-                    php_stream_printf(stream, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_property_name), zval_id);
+                    php_stream_printf(stream_info->stream, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_property_name), zval_id);
 
                     zend_string_release(escaped_property_name);
                 } else {
@@ -324,31 +324,32 @@ void meminfo_hash_dump(php_stream *stream, HashTable *ht, zend_bool is_object, H
 
                     escaped_key = meminfo_escape_for_json(ZSTR_VAL(key));
 
-                    php_stream_printf(stream, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_key), zval_id);
+                    php_stream_printf(stream_info->stream, "            \"%s\":\"%s\"", ZSTR_VAL(escaped_key), zval_id);
 
                     zend_string_release(escaped_key);
                 }
 
                 break;
             case HASH_KEY_IS_LONG:
-                php_stream_printf(stream, "            \"%ld\":\"%s\"", num_key, zval_id);
+                php_stream_printf(stream_info->stream, "            \"%ld\":\"%s\"", num_key, zval_id);
                 break;
         }
 
         zend_hash_move_forward_ex(ht, &pos);
     }
-    php_stream_printf(stream, "\n        }\n");
+    php_stream_printf(stream_info->stream, "\n        }\n");
 
     zend_hash_internal_pointer_reset_ex(ht, &pos);
     while ((zval = zend_hash_get_current_data_ex(ht, &pos)) != NULL) {
-        meminfo_zval_dump(stream, NULL, NULL, zval, visited_items, first_element);
+        meminfo_zval_dump(stream_info, NULL, NULL, zval);
         zend_hash_move_forward_ex(ht, &pos);
     }
 }
 
-void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * symbol_name, zval * zv, HashTable *visited_items, int *first_element)
+void meminfo_zval_dump(meminfo_stream_info *stream_info, char * frame_label, zend_string * symbol_name, zval * zv)
 {
     char zval_identifier[17];
+    bool first_element;
 
     if (Z_TYPE_P(zv) == IS_INDIRECT) {
         zv = Z_INDIRECT_P(zv);
@@ -364,19 +365,19 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
         sprintf(zval_identifier, "%p", zv);
     }
 
-    if (meminfo_visit_item(zval_identifier, visited_items)) {
+    first_element = zend_array_count(stream_info->visited_items) > 0;
+
+    if (meminfo_visit_item(zval_identifier, stream_info->visited_items)) {
         return;
     }
 
-    if (! *first_element) {
-        php_stream_printf(stream, "\n    },\n");
-    } else {
-        *first_element = 0;
+    if (first_element) {
+        php_stream_printf(stream_info->stream, "\n    },\n");
     }
 
-    php_stream_printf(stream, "    \"%s\" : {\n", zval_identifier);
-    php_stream_printf(stream, "        \"type\" : \"%s\",\n", zend_get_type_by_const(Z_TYPE_P(zv)));
-    php_stream_printf(stream, "        \"size\" : \"%ld\",\n", meminfo_get_element_size(zv));
+    php_stream_printf(stream_info->stream, "    \"%s\" : {\n", zval_identifier);
+    php_stream_printf(stream_info->stream, "        \"type\" : \"%s\",\n", zend_get_type_by_const(Z_TYPE_P(zv)));
+    php_stream_printf(stream_info->stream, "        \"size\" : \"%ld\",\n", meminfo_get_element_size(zv));
 
     if (frame_label) {
         zend_string * escaped_frame_label;
@@ -386,19 +387,19 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 
             escaped_symbol_name = meminfo_escape_for_json(ZSTR_VAL(symbol_name));
 
-            php_stream_printf(stream, "        \"symbol_name\" : \"%s\",\n", ZSTR_VAL(escaped_symbol_name));
+            php_stream_printf(stream_info->stream, "        \"symbol_name\" : \"%s\",\n", ZSTR_VAL(escaped_symbol_name));
 
             zend_string_release(escaped_symbol_name);
         }
 
         escaped_frame_label = meminfo_escape_for_json(frame_label);
 
-        php_stream_printf(stream, "        \"is_root\" : true,\n");
-        php_stream_printf(stream, "        \"frame\" : \"%s\"\n", ZSTR_VAL(escaped_frame_label));
+        php_stream_printf(stream_info->stream, "        \"is_root\" : true,\n");
+        php_stream_printf(stream_info->stream, "        \"frame\" : \"%s\"\n", ZSTR_VAL(escaped_frame_label));
 
         zend_string_release(escaped_frame_label);
     } else {
-        php_stream_printf(stream, "        \"is_root\" : false\n");
+        php_stream_printf(stream_info->stream, "        \"is_root\" : false\n");
     }
 
     if (Z_TYPE_P(zv) == IS_OBJECT) {
@@ -409,12 +410,12 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 
         escaped_class_name = meminfo_escape_for_json(ZSTR_VAL(Z_OBJCE_P(zv)->name));
 
-        php_stream_printf(stream, ",\n");
-        php_stream_printf(stream, "        \"class\" : \"%s\",\n", ZSTR_VAL(escaped_class_name));
+        php_stream_printf(stream_info->stream, ",\n");
+        php_stream_printf(stream_info->stream, "        \"class\" : \"%s\",\n", ZSTR_VAL(escaped_class_name));
 
         zend_string_release(escaped_class_name);
 
-        php_stream_printf(stream, "        \"object_handle\" : \"%d\",\n", Z_OBJ_HANDLE_P(zv));
+        php_stream_printf(stream_info->stream, "        \"object_handle\" : \"%d\",\n", Z_OBJ_HANDLE_P(zv));
 
 #if PHP_VERSION_ID >= 70400
         properties = zend_get_properties_for(zv, ZEND_PROP_PURPOSE_DEBUG);
@@ -424,7 +425,7 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 #endif
 
         if (properties != NULL) {
-            meminfo_hash_dump(stream, properties, 1, visited_items, first_element);
+            meminfo_hash_dump(stream_info, properties, 1);
 
 #if PHP_VERSION_ID >= 70400
             zend_release_properties(properties);
@@ -436,10 +437,10 @@ void meminfo_zval_dump(php_stream * stream, char * frame_label, zend_string * sy
 #endif
         }
     } else if (Z_TYPE_P(zv) == IS_ARRAY) {
-        php_stream_printf(stream, ",\n");
-        meminfo_hash_dump(stream, Z_ARRVAL_P(zv), 0, visited_items, first_element);
+        php_stream_printf(stream_info->stream, ",\n");
+        meminfo_hash_dump(stream_info, Z_ARRVAL_P(zv), 0);
     } else {
-        php_stream_printf(stream, "\n");
+        php_stream_printf(stream_info->stream, "\n");
     }
 }
 
