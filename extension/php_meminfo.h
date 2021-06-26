@@ -24,7 +24,9 @@ typedef struct meminfo_stream_info {
 void meminfo_browse_exec_frames(meminfo_stream_info *stream_info);
 void meminfo_browse_class_static_members(meminfo_stream_info *stream_info);
 void meminfo_browse_function_static_variables(meminfo_stream_info *stream_info, char* class_name, HashTable *function_table);
+void meminfo_browse_error_or_exception_handlers(meminfo_stream_info *stream_info);
 
+int meminfo_error_or_exception_handler_dump(zval *callable, meminfo_stream_info *stream_info);
 void meminfo_zval_dump(meminfo_stream_info *stream_info, char * frame_label, zend_string * symbol_name, zval * zv);
 void meminfo_hash_dump(meminfo_stream_info *stream_info, HashTable *ht, zend_bool is_object);
 void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *symbol_table);

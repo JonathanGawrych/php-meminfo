@@ -83,6 +83,7 @@ PHP_FUNCTION(meminfo_dump)
     meminfo_browse_exec_frames(&stream_info);
     meminfo_browse_class_static_members(&stream_info);
     meminfo_browse_function_static_variables(&stream_info, "<GLOBAL_FUNCTION>", CG(function_table));
+    meminfo_browse_error_or_exception_handlers(&stream_info);
 
     php_stream_printf(stream, "\n    }\n");
     php_stream_printf(stream, "}\n}\n");
@@ -227,6 +228,46 @@ void meminfo_browse_function_static_variables(meminfo_stream_info *stream_info, 
             } ZEND_HASH_FOREACH_END();
         }
     } ZEND_HASH_FOREACH_END();
+}
+
+void meminfo_browse_error_or_exception_handlers(meminfo_stream_info *stream_info)
+{
+    // First get the current error/exception handler
+    snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<ERROR_HANDLER>");
+    meminfo_error_or_exception_handler_dump(&EG(user_error_handler), stream_info);
+    snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<EXCEPTION_HANDLER>");
+    meminfo_error_or_exception_handler_dump(&EG(user_exception_handler), stream_info);
+    // Then get all the previous error/exception handler
+    // Calling set_exception_handler twice doesn't just change the handler, but pushes the old
+    // one into a stack that can be restored with restore_exception_handler. They should have
+    // used the word 'push' instead of 'set'
+    snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<PREVIOUS_ERROR_HANDLER>");
+    zend_stack_apply_with_argument(
+        &EG(user_error_handlers),
+        ZEND_STACK_APPLY_TOPDOWN,
+        (int (*)(void *, void *)) meminfo_error_or_exception_handler_dump,
+        stream_info
+    );
+    snprintf(stream_info->frame_label, sizeof(stream_info->frame_label), "<PREVIOUS_EXCEPTION_HANDLER>");
+    zend_stack_apply_with_argument(
+        &EG(user_exception_handlers),
+        ZEND_STACK_APPLY_TOPDOWN,
+        (int (*)(void *, void *)) meminfo_error_or_exception_handler_dump,
+        stream_info
+    );
+}
+
+/**
+ * This should be called with zend_stack_apply_with_argument
+ * we return false because a true value stops zend_stack_apply from looking
+ */
+int meminfo_error_or_exception_handler_dump(zval *callable, meminfo_stream_info *stream_info)
+{
+    if (Z_TYPE_P(callable) != IS_UNDEF) {
+        meminfo_zval_dump(stream_info, stream_info->frame_label, NULL, callable);
+    }
+    
+    return false;
 }
 
 void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *p_symbol_table)
