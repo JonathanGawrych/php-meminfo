@@ -48,12 +48,12 @@ class GraphBrowser
         $map = $mapSearch->getEdgesMap();
 
         foreach ($map as $endVertexId => $path) {
-            $endVertex = $graph->getVertex($endVertexId);
-            $endVertexData = $endVertex->getAttribute('data');
+            // $endVertex = $graph->getVertex($endVertexId);
+            // $endVertexData = $endVertex->getAttribute('data');
 
-            if ($endVertexData['is_root']) {
+            // if ($endVertexData['is_root']) {
                 $paths[$endVertexId] = $path;
-            }
+            // }
         }
 
         if ($to->getAttribute('data')['is_root']) {

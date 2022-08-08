@@ -26,6 +26,10 @@ Check that error handlers are accounted for
     // set the current error handlers
     set_error_handler(new MyHandler('MyError'));
     set_exception_handler(new MyHandler('MyException'));
+    
+    // add a shutdown handler
+    register_shutdown_function(new MyHandler('MyShutdown'));
+    register_shutdown_function(new MyHandler('MyShutdownWithParams'), 'param');
 
     meminfo_dump($dump);
 
@@ -35,15 +39,23 @@ Check that error handlers are accounted for
 
     $myArrayDump = [];
 
-    $frames = ['<ERROR_HANDLER>','<EXCEPTION_HANDLER>','<PREVIOUS_ERROR_HANDLER>','<PREVIOUS_EXCEPTION_HANDLER>'];
+    $frames = [
+      '<ERROR_HANDLER>',
+      '<EXCEPTION_HANDLER>',
+      '<PREVIOUS_ERROR_HANDLER>',
+      '<PREVIOUS_EXCEPTION_HANDLER>',
+      '<SHUTDOWN_HANDLER>'
+    ];
     foreach ($meminfoData['items'] as $item) {
         if (isset($item['frame']) && in_array($item['frame'], $frames)) {
             echo "Frame: " . $item['frame'] . "\n";
             echo "  Type: " . $item['type'] . "\n";
-            echo "  Class: " . $item['class'] . "\n";
+            if (isset($item['class'])) {
+              echo "  Class: " . $item['class'] . "\n";
+            }
             echo "  Is root: " . $item['is_root'] . "\n";
-            echo "  Children: \n";
             if (isset($item['children'])) {
+              echo "  Children:\n";
                 foreach($item['children'] as $symbol => $address) {
                     echo "    $symbol\n";
                 }
@@ -56,35 +68,50 @@ Frame: <ERROR_HANDLER>
   Type: object
   Class: MyHandler
   Is root: 1
-  Children: 
+  Children:
     MyError
 Frame: <EXCEPTION_HANDLER>
   Type: object
   Class: MyHandler
   Is root: 1
-  Children: 
+  Children:
     MyException
 Frame: <PREVIOUS_ERROR_HANDLER>
   Type: object
   Class: MyHandler
   Is root: 1
-  Children: 
+  Children:
     MyPrevousError
 Frame: <PREVIOUS_ERROR_HANDLER>
   Type: object
   Class: MyHandler
   Is root: 1
-  Children: 
+  Children:
     MyPrevousPreviousError
 Frame: <PREVIOUS_EXCEPTION_HANDLER>
   Type: object
   Class: MyHandler
   Is root: 1
-  Children: 
+  Children:
     MyPreviousException
 Frame: <PREVIOUS_EXCEPTION_HANDLER>
   Type: object
   Class: MyHandler
   Is root: 1
-  Children: 
+  Children:
     MyPreviousPreviousException
+Frame: <SHUTDOWN_HANDLER>
+  Type: object
+  Class: MyHandler
+  Is root: 1
+  Children:
+    MyShutdown
+Frame: <SHUTDOWN_HANDLER>
+  Type: object
+  Class: MyHandler
+  Is root: 1
+  Children:
+    MyShutdownWithParams
+Frame: <SHUTDOWN_HANDLER>
+  Type: string
+  Is root: 1

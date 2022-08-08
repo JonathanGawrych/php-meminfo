@@ -1,0 +1,10 @@
+{
+	"files.associations": {
+		"zend_extensions.h": "c",
+		"zend_closures.h": "c",
+		"zend_exceptions.h": "c",
+		"zend_compile.h": "c",
+		"php_standard.h": "c",
+		"info.h": "c"
+	}
+}

@@ -11,7 +11,6 @@ extern zend_module_entry meminfo_module_entry;
 #define MEMINFO_COPYRIGHT_SHORT "Copyright (c) 2010-2021"
 
 PHP_FUNCTION(meminfo_dump);
-PHP_FUNCTION(object_store_dump);
 
 zend_ulong   meminfo_get_element_size(zval* z);
 
@@ -25,14 +24,15 @@ typedef struct meminfo_stream_info {
 void meminfo_browse_exec_frames(meminfo_stream_info *stream_info);
 void meminfo_browse_class_static_members(meminfo_stream_info *stream_info);
 void meminfo_browse_function_static_variables(meminfo_stream_info *stream_info, char* class_name, HashTable *function_table);
-void meminfo_browse_error_or_exception_handlers(meminfo_stream_info *stream_info);
+void meminfo_browse_handlers(meminfo_stream_info *stream_info);
 
 int meminfo_error_or_exception_handler_dump(zval *callable, meminfo_stream_info *stream_info);
 void meminfo_zval_dump(meminfo_stream_info *stream_info, char * frame_label, zend_string * symbol_name, zval * zv);
 void meminfo_hash_dump(meminfo_stream_info *stream_info, HashTable *ht, zend_bool is_object);
+void meminfo_closure_dump(meminfo_stream_info *stream_info, zval *zv);
 void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *symbol_table);
 void meminfo_browse_zvals_from_op_array(meminfo_stream_info *stream_info, zend_op_array *op_array, zend_execute_data *exec_frame);
-void meminfo_browse_object_store(php_stream *stream, HashTable * visited_items, int *first_element);
+void meminfo_browse_object_store(meminfo_stream_info *stream_info);
 
 int meminfo_visit_item(char *item_identifier, HashTable *visited_items);
 
