@@ -54,7 +54,7 @@ class ReferencePathCommand extends Command
 
         $graphBrowser = new GraphBrowser($items);
 
-        $paths = $graphBrowser->findReferencePaths($itemId);
+        $paths = $graphBrowser->findReferencePaths($itemId, $output);
 
         $output->writeln(sprintf('<info>Found %d paths</info>', count($paths)));
         foreach ($paths as $vertexId => $path) {
@@ -63,7 +63,8 @@ class ReferencePathCommand extends Command
                 $output->writeln("<info>Path from $vertexId</info>");
                 $this->renderDetailedPath($output, $path);
             } else {
-                $output->writeln("<info>Path to $vertexId</info>");
+                $output->writeln("");
+                $output->writeln("<info>Path from $vertexId</info>");
                 $this->renderSimplePath($output, $path);
             }
         }
@@ -116,30 +117,42 @@ class ReferencePathCommand extends Command
 
         foreach ($pathFromRoot as $edge) {
 
-            $vertex = $edge->getVertexEnd();
+            // Remember, start and end are reversed
+            $vertexStart = $edge->getVertexStart();
+            $vertexEnd = $edge->getVertexEnd();
 
-            $data = $vertex->getAttribute('data');
+            $dataStart = $vertexStart->getAttribute('data');
+            $dataEnd = $vertexEnd->getAttribute('data');
 
-            if ($data['is_root'] === true) {
-                $frame = $data['frame'];
-
-                $output->write(sprintf('(%s)', $frame));
-
-                if ("CLASS_STATIC_MEMBER" !== $frame) {
-                    $output->write('$');
+            if ($indent === 0) {
+                if (isset($dataEnd['frame'])) {
+                    $frame = $dataEnd['frame'];
+    
+                    $output->write(sprintf('(%s)', $frame));
+                    if ("CLASS_STATIC_MEMBER" !== $frame) {
+                        $output->write('$');
+                    }
+                    $output->write($dataEnd['symbol_name']);
+                } else if ($dataEnd['type'] === 'object') {
+                    $output->write($dataEnd['class'] . ' (' . $vertexEnd->getId() . ')');
+                } else if ($dataEnd['type'] == 'array') {
+                    $output->write('array');
                 }
-                $output->write($data['symbol_name']);
+                $indent += 2;
             }
-
-            if ($data['type'] == 'object') {
+            
+            if ($dataEnd['type'] == 'object') {
                 $output->writeln('');
                 $output->write(str_repeat(' ', $indent));
                 $output->write('->');
                 $output->write($edge->getAttribute('name'));
-            } elseif ($data['type'] == 'array') {
+                $indent +=2;
+            } elseif ($dataEnd['type'] == 'array') {
                 $output->write(sprintf('["%s"]', $edge->getAttribute('name')));
             }
-            $indent +=2;
+            if ($dataStart['type'] === 'object') {
+                $output->write('{' .$dataStart['class'] . ' (' . $vertexStart->getId() . ')}');
+            }
         }
         $output->writeln('');
 

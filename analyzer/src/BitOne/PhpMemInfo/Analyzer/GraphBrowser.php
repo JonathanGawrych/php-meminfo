@@ -35,17 +35,17 @@ class GraphBrowser
      *
      * @return array
      */
-    public function findReferencePaths($itemId)
+    public function findReferencePaths($itemId, $output)
     {
-        $graph = $this->getGraph();
+        $graph = $this->getGraph($output);
 
         $to = $graph->getVertex($itemId);
 
-        $paths = [];
+        // $paths = [];
 
         $mapSearch = new BreadthFirst($to);
 
-        $map = $mapSearch->getEdgesMap();
+        $paths = $mapSearch->getEdgesMap();
 
         foreach ($map as $endVertexId => $path) {
             // $endVertex = $graph->getVertex($endVertexId);
@@ -66,14 +66,32 @@ class GraphBrowser
     }
 
     /**
+     * Find all references coming from roots.
+     *
+     * @param string $itemid
+     *
+     * @return array
+     */
+    public function findReferenceParents($itemId, $output)
+    {
+        $graph = $this->getGraph($output);
+
+        $to = $graph->getVertex($itemId);
+
+        $mapSearch = new BreadthFirst($to);
+
+        return $mapSearch->getParentMap();
+    }
+
+    /**
      * Build the graph if necessary and return it.
      *
      * @param Graph
      */
-    protected function getGraph()
+    public function getGraph($output)
     {
         if (null === $this->graph) {
-            $this->buildGraph();
+            $this->buildGraph($output);
         }
 
         return $this->graph;
@@ -82,19 +100,24 @@ class GraphBrowser
     /**
      * Build the graph from the items.
      */
-    protected function buildGraph()
+    protected function buildGraph($output)
     {
         $this->graph = new Graph();
-        $this->createVertices();
-        $this->createEdges();
+        $this->createVertices($output);
+        $this->createEdges($output);
     }
 
     /**
      * Create vertices on the graph from items.
      */
-    protected function createVertices()
+    protected function createVertices($output)
     {
+        $output->writeln('Processing ' . count($this->items) . ' vertices');
+        $num = 0;
         foreach ($this->items as $itemId => $itemData) {
+            if (++$num % 50000 === 0) {
+                $output->writeln('Processed ' . $num . ' vertices');
+            }
             $vertex = $this->graph->createVertex($itemId);
             $vertex->setAttribute('data', $itemData);
         }
@@ -103,9 +126,14 @@ class GraphBrowser
     /**
      * Create edges on the graph between vertices.
      */
-    protected function createEdges()
+    protected function createEdges($output)
     {
+        $output->writeln('Processing ' . count($this->items) . ' vertices for edges');
+        $num = 0;
         foreach ($this->items as $itemId => $itemData) {
+            if (++$num % 10000 === 0) {
+                $output->writeln('Processed ' . $num . ' vertices for edges');
+            }
             if (isset($itemData['children'])) {
                 $children = $itemData['children'];
                 $vertex = $this->graph->getVertex($itemId);

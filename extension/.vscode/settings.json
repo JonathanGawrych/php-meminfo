@@ -6,5 +6,6 @@
 		"zend_compile.h": "c",
 		"php_standard.h": "c",
 		"info.h": "c"
+		"php_meminfo.h": "c"
 	}
 }

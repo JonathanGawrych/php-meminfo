@@ -4,6 +4,7 @@ namespace BitOne\PhpMemInfo\Console;
 
 use BitOne\PhpMemInfo\Console\Command\QueryCommand;
 use BitOne\PhpMemInfo\Console\Command\ReferencePathCommand;
+use BitOne\PhpMemInfo\Console\Command\ReferenceParentsCommand;
 use BitOne\PhpMemInfo\Console\Command\SummaryCommand;
 use BitOne\PhpMemInfo\Console\Command\TopChildrenCommand;
 use BitOne\PhpMemInfo\Console\Command\TopSizeCommand;
@@ -22,6 +23,7 @@ class Application extends BaseApplication
 
         $this->add(new QueryCommand());
         $this->add(new ReferencePathCommand());
+        $this->add(new ReferenceParentsCommand());
         $this->add(new SummaryCommand());
         $this->add(new TopChildrenCommand());
     }

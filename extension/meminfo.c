@@ -366,6 +366,74 @@ int meminfo_error_or_exception_handler_dump(zval *callable, meminfo_stream_info 
 }
 
 void meminfo_browse_zvals_from_symbol_table(meminfo_stream_info *stream_info, HashTable *p_symbol_table)
+int meminfo_browse_function_static_variables(zval* zv, void* return_value TSRMLS_DC)
+{
+	zend_function* function;
+	char zval_id[17];
+	
+	function = (zend_function*) Z_PTR_P(zv);
+	// php_printf("%i) %s\n", function->type, ZSTR_VAL(function->op_array.function_name));
+	if (function->type == ZEND_USER_FUNCTION) {
+		zval *prop, tmp;
+		zend_string *key;
+		zend_long h;
+		zend_property_info *property_info;
+
+		zval statics;
+
+		array_init(&statics);
+		
+		ZEND_HASH_FOREACH_KEY_VAL(function->op_array.static_variables, h, key, prop) {
+			if (key) {
+				zval nameAddressPair;
+
+				array_init(&nameAddressPair);
+				add_next_index_zval(&nameAddressPair, prop);
+				
+				if (Z_TYPE_P(prop) == IS_INDIRECT) {
+					prop = Z_INDIRECT_P(prop);
+				}
+				if (Z_ISREF_P(prop)) {
+					ZVAL_DEREF(prop);
+				}
+				if (Z_TYPE_P(prop) == IS_OBJECT) {
+					sprintf(zval_id, "%p", Z_OBJ_P(prop));
+				} else {
+					sprintf(zval_id, "%p", prop);
+				}
+				add_next_index_string(&nameAddressPair, zval_id);
+				
+				add_assoc_zval(&statics, ZSTR_VAL(key), &nameAddressPair);
+			}
+		} ZEND_HASH_FOREACH_END();
+
+		add_assoc_zval((zval*) return_value, ZSTR_VAL(function->op_array.function_name), &statics);
+	}
+	return 0;
+}
+
+int meminfo_browse_function_static(zval* zv, void* return_value TSRMLS_DC)
+{
+	zend_class_entry* class;
+	
+	class = (zend_class_entry*) Z_PTR_P(zv);
+	// php_printf("%i) %s\n", class->type, ZSTR_VAL(class->name));
+	if (class->type == ZEND_USER_CLASS) {
+		zval *prop, tmp;
+		zend_string *key;
+		zend_long h;
+		zend_property_info *property_info;
+
+		zval statics;
+
+		array_init(&statics);
+		
+		zend_hash_apply_with_argument(&class->function_table, meminfo_browse_function_static_variables, return_value TSRMLS_CC);
+	}
+	return 0;
+}
+
+void meminfo_browse_zvals_from_symbol_table(php_stream *stream, char* frame_label, HashTable *p_symbol_table, HashTable * visited_items, int *first_element)
 {
     zval *zval_to_dump;
     HashPosition pos;
